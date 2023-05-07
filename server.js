@@ -1,48 +1,47 @@
-`use strict`
+'use strict';
 
 const express = require('express');
-const cors = require("cors");
-
+const cors = require('cors');
 const app = express();
+const data = require('./Movie Data/data.json');
 
 app.use(cors());
+app.use(express.json());
 
+app.listen(3000, () => console.log('up and running'));
 
+app.get('/', handleHome);
+app.get('/favorite', handleFav);
 
+// handle 404 errors
+app.use((req, res, next) => {
+    res.status(404).json({
+        statusCode: 404,
+        message: 'Page not found!'
+    });
+});
 
-app.listen(3000, () => console.log("Hello from movie library"))
+// handle 500 errors
+app.use((err, req, res, next) => {
+    console.error(err.stack);
+    res.status(500).json({
+        statusCode: 500,
+        message: 'Internal server error!'
+    });
+});
 
-
-function Movies(title, poster_path, overview) {
-    this.title = title
-    this.poster_path = poster_path
-    this.overview = overview
+function handleFav(req, res) {
+    console.log('testing the favorite url');
+    res.send('welcome to favorites');
 }
 
+function Movie(title, posterPath, overview) {
+    this.title = title;
+    this.posterPath = posterPath;
+    this.overview = overview;
+}
 
-
-app.get("/", (req, res) => {
-    const data = require("./data.json");
-    let newMovie = new Movies(
-        data.title, data.poster_path, data.overview
-    )
-    res.send(newMovie)
-})
-
-
-app.get("/favorite", (req, res) => {
-    let str = "Welcome to Favorite Page";
-    res.status(200).send(str);
-
-})
-
-app.get("*", (req, res) => {
-    let str3 = "page not found error"
-    res.status(404).send(str3)
-})
-
-
-app.get("*", (req, res) => {
-    let str2 = "Sorry, something went wrong"
-    res.status(500).send(str2)
-})
+function handleHome(req, res) {
+    const newMovie = new Movie(data.title, data.poster_path, data.overview);
+    res.json({ newMovie: newMovie });
+}
