@@ -1,47 +1,86 @@
 'use strict';
 
-const express = require('express');
-const cors = require('cors');
+
+const express = require("express");
+const cors = require("cors");
+const axios = require("axios");
+require('dotenv').config()
+const PORT = process.env.PORT;
+const url = process.env.URL;
+const key = process.env.KEY;
 const app = express();
-const data = require('./Movie Data/data.json');
-
 app.use(cors());
-app.use(express.json());
-
-app.listen(3000, () => console.log('up and running'));
-
-app.get('/', handleHome);
-app.get('/favorite', handleFav);
+app.use(express.json())
+function Movies(title, posterPath, overview) {
+    this.title = title,
+        this.posterPath = posterPath,
+        this.overview = overview,
+        this.allMovies.push(this)
+}
+Movies.allMovies = [];
 
 // handle 404 errors
-app.use((req, res, next) => {
-    res.status(404).json({
-        statusCode: 404,
-        message: 'Page not found!'
-    });
-});
-
+function handleNotFound() {
+    return {
+        status: 404,
+        responeText: "Sorry, Page Not found"
+    }
+}
 // handle 500 errors
-app.use((err, req, res, next) => {
-    console.error(err.stack);
-    res.status(500).json({
-        statusCode: 500,
-        message: 'Internal server error!'
-    });
-});
 
-function handleFav(req, res) {
-    console.log('testing the favorite url');
-    res.send('welcome to favorites');
+function handleServerErorr() {
+    return {
+        status: 500,
+        responeText: "Sorry something went wrong"
+    }
 }
 
-function Movie(title, posterPath, overview) {
-    this.title = title;
-    this.posterPath = posterPath;
-    this.overview = overview;
-}
+app.get('/', (req, res) => {
+    try {
+        res.send("dsa");
+    } catch {
+        let error = handleServerErorr();
+        res.status(error.status).send(error.responeText);
+    }
+})
+app.get('/trending', (req, res) => {
+    try {
+        //  let movie=await axios.get(`${url}trending/all/week?api_key=${key}`);
+        axios.get(`https://api.themoviedb.org/3/search/movie?api_key=668baa4bb128a32b82fe0c15b21dd699&callback=test&query=The&page=2&language=en-US`)
+            .then((resp) => {
+                res.send(resp.data)
+            })
 
-function handleHome(req, res) {
-    const newMovie = new Movie(data.title, data.poster_path, data.overview);
-    res.json({ newMovie: newMovie });
-}
+
+    } catch (err) {
+        console.log(err)
+    }
+})
+
+app.get('/search/:movieName', async (req, res) => {
+    let movieName = req.params.movieName;
+    try {
+        let movie = await axios.get(`${url}search/movie?api_key=${key}&language=en-US&query=${movieName}`)
+        res.send(movie.data)
+    } catch (err) {
+        console.log(err)
+    }
+})
+app.get('/movie/:id/reviews', async (req, res) => {
+    const movieId = req.params.id;
+    let movieRev = await axios.get(`${url}movie/${movieId}/reviews?api_key=${key}&language=en-US`);
+    res.send(movieRev.data.results)
+})
+app.get('/movie/:id/similar', async (req, res) => {
+    let movieId = req.params.id;
+    let similarMovie = await axios.get(`${url}movie/${movieId}/similar?api_key=${key}&language=en-US`)
+    res.send(similarMovie.data.results)
+})
+
+app.get('*', (req, res) => {
+    let error = handleNotFound();
+    res.status(error.status).send(error.responeText)
+})
+app.listen(PORT, () => {
+    console.log(`listening on ${PORT}`)
+})
