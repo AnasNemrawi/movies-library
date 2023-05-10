@@ -5,6 +5,7 @@
 ## WRRC
 ![WRRC](./assets/WRRC.jpg "web request response cycle")
 ![WRRC](./assets/1.jpg "web request response cycle")
+![WRRC](./assets/lap13.png "web request response cycle")
 
 
 ## Overview
