@@ -1,241 +1,248 @@
 'use strict';
-const express = require('express')
-const cors = require('cors')
-const app = express()
-const data = require('./Movie Data/data.json'); // outdated data.json
-const axios = require('axios'); // require axious to use it in the trend function
-require('dotenv').config(); // to be able to use dotenv.config from .env file
-const pg = require('pg');
-const client = new pg.Client(process.env.DBURL); // Creating client from the database url
 
+const express = require('express');
+const cors = require("cors");
+const app = express()
+const axios = require('axios');
+require('dotenv').config();
+const pg = require("pg")
+const APIKEY = process.env.APIkey;
 
 app.use(cors())
 app.use(express.json())
-const PORT = process.env.PORT || 3001; // port number from .env and backup port
-client.connect().then(test => {
 
-    app.listen(PORT, () => console.log('up and running'));
-}
-)
+const PORT = process.env.PORT || 3005;
+const client = new pg.Client(process.env.DBURL)
 
+app.get("/", homeHandler);
+app.get("/favorite", favoriteHandler)
+app.get("/trending", trendingHandler);
+app.get('/search', searchHandler);
+app.get('/idd', movieIdHandler);
+app.get("/getMovies", getMoviewHandler);
+app.post("/getMovies", postMovieHandler);
+app.get("/getMovies/:newid", getsecMoviewHandler);
+app.delete("/getMovies/:id", deletMovieHandler);
+app.put("/getMovies/:iddd", UPDateMovieHandler);
+app.get('/person', personHandler);
+app.get("*", defaultHandler);
+app.use(errorHandler);
 
-// app.get routes
-app.get('/', handleHome)
-app.get('/favorite', handleFav)
-app.get('/trend', handleTrend)
-app.get('/search', handleSearch)
-
-app.get('/trend/image', imgHandler)
-app.get('/trend/overview', handleTrendOverview)
-
-app.get('/addmovie', seeMovieHandler)
-app.post('/addmovie', addMovieHandler)
-app.get('/addmovie/:id', getHandler)
-app.put('/addmovie/:id', updateHandler)
-app.delete('/addmovie/:id', deleteHandler)
-// constructor to extract data
-function Movie(id, title, release_date, posterPath, overview) {
-    this.id = id;
+function Movies(id, title, release_data, poster_path, overview) {
+    this.id = id
     this.title = title
-    this.release_date = release_date
-    this.posterPath = posterPath
+    this.release_data = release_data
+    this.poster_path = poster_path
     this.overview = overview
 }
-// handle home and routes
-//................................................................
-function handleHome(req, res) {
-    const newMovie = new Movie(data.id, data.title, data.release_date)
-    res.json(
-        { newMovie: newMovie }
-    )
-}
 
-function handleFav(req, res) {
+const data = require("./Movie Data/data.json")
 
-    res.send('welcome to favorites')
-}
-function handleSearch(req, res) {
-    const searchQuery = req.query.laith;
-    // https://api.themoviedb.org/3/search/movie?api_key=668baa4bb128a32b82fe0c15b21dd699&language=en-US&query=The&page=2
-    axios.get(`${process.env.URLSEARCH}?api_key=${process.env.MOVKEY}&query=${searchQuery}`).then(result => {
-        res.status(200).json(
-            {
-                code: 200,
-                movie: result.data.results
-            }
-        );
-    })
-}
 
-async function handleTrend(req, res) {
-
-    const moveData = await axios.get(`${process.env.URLMOVIE}?api_key=${process.env.MOVKEY}`);
-
-    const movieData = moveData.data.results.map(movie => ({
-        id: movie.id,
-        title: movie.title,
-        release_date: movie.release_date,
-        poster_path: movie.poster_path,
-        overview: movie.overview
-    }));
-
-    res.json({
-        code: 200,
-        message: movieData
-    });
-
-}
-
-// display pic of the first movie of trending 
-async function imgHandler(req, res) {
-    try { //used the try catch method to make debugging easier
-        const movieData = await axios.get(`${process.env.URLMOVIE}?api_key=${process.env.MOVKEY}`);
-
-        if (movieData.data.results.length === 0) {
-            return res.status(404).send("No movies found.");
-        }
-
-        const posterPath = movieData.data.results[0].poster_path;
-        const imagePath = `https://image.tmdb.org/t/p/w500/${posterPath}`;
-        //used response type and chosen arraybuffer data type then used from to tell the client what type of data it is which is bvinary data so it can understand it and use it correctly
-
-        const imageResponse = await axios.get(imagePath, { responseType: 'arraybuffer' });
-        const imageBuffer = Buffer.from(imageResponse.data, 'binary');
-
-        res.type('jpg').send(imageBuffer);
-    } catch (error) {
-        console.error(error);
-        res.status(500).send("Internal server error.");
-    }
+function homeHandler(req, res) {
+    let newMovie = new Movies(
+        data.id, data.title, data.release_data, data.poster_path, data.overview
+    );
+    res.send(newMovie);
 }
 
 
-async function handleTrendOverview(req, res) {
+function favoriteHandler(req, res) {
+    let str = "Welcome to Favorite Page"
+    res.status(200).send(str);
+}
+
+function defaultHandler(req, res) {
+    let str3 = "page not found error"
+    res.status(404).send(str3)
+}
+
+
+function trendingHandler(req, res) {
     try {
-        const movieData = await axios.get(`${process.env.URLMOVIE}?api_key=${process.env.MOVKEY}`);
+        const url = `https://api.themoviedb.org/3/trending/all/week?api_key=${APIKEY}`;
+        axios.get(url)
+            .then((d) => {
+                let mapResult = d.data.results.map((newItem) => {
+                    let singleFilm = new Movies(newItem.id, newItem.title, newItem.release_date, newItem.poster_path, newItem.overview)
+                    return singleFilm;
+                })
+                res.send(mapResult)
+            })
+            .catch((error) => {
+                res.status(500).send(error)
+            })
+    }
 
-        if (movieData.data.results.length === 0) {
-            return res.status(404).send("No movies found.");
-        }
+    catch (error) {
+        errorHandler(error, req, res)
+    }
 
-        const firstMovieId = movieData.data.results[0].id;
-        // console.log(firstMovieId)
+}
 
-        const overviewData = await axios.get(`https://api.themoviedb.org/3/movie/${firstMovieId}?api_key=${process.env.MOVKEY}`);
-        console.log(overviewData)
-        const overview = overviewData.data.overview;
+function searchHandler(req, res) {
+    try {
+        const url2 = `https://api.themoviedb.org/3/search/movie?api_key=${APIKEY}&language=en-US&query=spider-man&page=1&include_adult=false`
+        axios.get(url2)
+            .then((b) => {
+                // console.log(b);
+                let mapResult2 = b.data.results.map((newItem2) => {
+                    // console.log(newItem2);
+                    let searchFilm = new Movies(newItem2.id, newItem2.title, newItem2.release_date, newItem2.poster_path, newItem2.overview);
 
-        res.status(200).json({
-            code: 200,
-            overview: overview
-        });
-    } catch (error) {
-        console.error(error);
-        res.status(500).send("Internal server error.");
+                    return searchFilm;
+                })
+                // console.log(mapResult2);
+                res.status(200).json(mapResult2)
+            })
+            .catch((error) => {
+                errorHandler(error, req, res)
+            })
+
+    }
+    catch (error) {
+        errorHandler(error, req, res)
     }
 }
-// data base handler get post update delete
-function seeMovieHandler(req, res) {
-    const sql = `select * from added_movie`;
-    client.query(sql).then(movie => {
-        res.json(
-            {
-                count: movie.rowCount,
-                data: movie.rows
-            });
-        // console.log(movie);
 
-    }).catch(err => {
-        handleErorr(err, req, res);
-    });
+
+function movieIdHandler(req, res) {
+    try {
+        const url3 = `https://api.themoviedb.org/3/movie/785084/videos?api_key=${APIKEY}&language=en-US`
+        axios.get(url3)
+            .then((c) => {
+                // console.log(c);
+                let mapResult3 = c.data.results.map((newItem3) => {
+                    // console.log(newItem3);
+                    let movieId = new Movies(newItem3.id, newItem3.title, newItem3.release_date, newItem3.poster_path, newItem3.overview)
+                    return movieId;
+                })
+                // console.log(mapResult3);
+                res.status(200).json(mapResult3)
+            })
+
+
+            .catch((error) => {
+                errorHandler(error, req, res)
+            })
+
+    }
+    catch (error) {
+        errorHandler(error, req, res)
+    }
 }
-function addMovieHandler(req, res) {
-    const userInput = req.body;
-    const sql = `insert into added_movie(id, title, overview) values($1, $2, $3) returning *`;
 
-    const handleValueFromUser = [userInput.id, userInput.title, userInput.overview];
-
-    client.query(sql, handleValueFromUser).then(data => {
-        res.status(201).json(data.rows)
-    }).catch(err => handleErorr(err, req, res, next));
+function personHandler(req, res) {
+    try {
+        const url4 = `https://api.themoviedb.org/3/person/976?api_key=${APIKEY}&language=en-US`
+        axios.get(url4)
+            .then((c) => {
+                // console.log(c);
+                // let mapResult3 = c.data.results.map((newItem3) => {
+                //     // console.log(newItem3);
+                //     let movieId = new Movie(newItem3.id, newItem3.title, newItem3.release_date, newItem3.poster_path, newItem3.overview)
+                //     return movieId;
+                res.send(c.data)
+            })
+            .catch((error) => {
+                errorHandler(error, req, res)
+            })
+    }
+    catch (error) {
+        errorHandler(error, req, res)
+    }
 }
-// Lab 14 get update and delete using sql
-function getHandler(req, res) {
-    const id = req.params.id;
-    const sql = 'SELECT * FROM added_movie WHERE id = $1;';
-    const params = [id];
-    client.query(sql, params)
-        .then(data => {
-            if (data.rowCount === 0) {
-                res.status(404).send(`Movie with ID ${id} not found`);
-            } else {
-                res.status(200).json({ data: data.rows[0] });
-            }
+
+function getMoviewHandler(req, res) {
+    const sql = `SELECT * from firstmov`;
+    client.query(sql)
+        .then((data) => {
+            res.send(data.rows)
         })
-        .catch(err => {
-            console.error('Error executing query', err.stack);
-            res.status(500).send('Error executing query');
-        });
-}
-
-function updateHandler(req, res) {
-    const id = req.params.id;
-    const updateData = req.body;
-    const sql = `UPDATE added_movie
-               SET title = $1, overview = $2
-               WHERE id = $3
-               RETURNING *;`;
-    const updated = [updateData.title, updateData.overview, id];
-    client.query(sql, updated)
-        .then(data => {
-            res.status(202).json({ data });
+        .catch((err) => {
+            errorHandler(err, req, res)
         })
-        .catch(err => {
-            console.error('Error executing query', err.stack);
-            res.status(500).send('Error executing query');
-        });
 }
 
-function deleteHandler(req, res) {
-    const id = req.params.id;
-    const sql = 'DELETE FROM added_movie WHERE id = $1 RETURNING *;';
-    const params = [id];
-    client.query(sql, params)
-        .then(data => {
-            if (data.rowCount === 0) {
-                res.status(404).send(`Movie with ID ${id} not found`);
-            } else {
-                res.status(204).send();
-            }
+function postMovieHandler(req, res) {
+    const mov = req.body;
+    const sql = `INSERT INTO firstmov (title,release_date,poster_path,overview,comment)
+    VALUES ('${mov.title}','${mov.release_date}','${mov.poster_path}','${mov.overview}','${mov.comment}') RETURNING *;`
+    client.query(sql)
+        .then((data) => {
+            res.send(data.rows)
         })
-        .catch(err => {
-            console.error('Error executing query', err.stack);
-            res.status(500).send('Error executing query');
-        });
+        .catch((error) => {
+            res.status(500).send(error)
+        })
 }
-//................................................
 
-// error handling
-// handle 404 errors
-app.use('/*', (req, res, next) => {
-    res.status(404).json({
-        statusCode: 404,
-        message: 'Page not found!'
-    });
-});
+function deletMovieHandler(req, res) {
+    const newID = req.params.id;
+    const sql = `DELETE FROM firstmov WHERE id=${newID} RETURNING *;`;
+    client.query(sql)
+        .then((data) => {
+            const sql = `SELECT * from firstmov`;
+            client.query(sql)
+                .then((data) => {
+                    res.send(data.rows)
+                })
+                .catch((err) => {
+                    errorHandler(err, req, res)
+                })
+        })
+        .catch((err) => {
+            errorHandler(err, req, res);
+        })
+}
 
-//handle 500 errors
-app.use(function handleErorr(err, req, res, next) {
-    // console.error(err.stack);
-    res.status(500).json({
-        statusCode: 500,
-        message: 'Internal server error!'
-    });
-});
+function getsecMoviewHandler(req, res) {
+    const secID = req.params.newid
+    const sql = `SELECT * from firstMOV WHERE id=${secID}`;
+    client.query(sql)
+        .then((data) => {
+            res.send(data.rows)
+        })
+        .catch((err) => {
+            errorHandler(err, req, res)
+        })
+}
+
+function UPDateMovieHandler(req, res) {
+    const therdID = req.params.iddd;
+    const show = req.body
+    const sql = `UPDATE firstmov SET comment ='${show.comment}' WHERE id =${therdID} RETURNING *`;
+    client.query(sql)
+        .then((data) => {
+            const sql = `SELECT * from firstmov`;
+            client.query(sql)
+                .then((data) => {
+                    res.send(data.rows)
+                })
+                .catch((err) => {
+                    errorHandler(err, req, res)
+                })
+        })
+        .catch((err) => {
+            errorHandler(err, req, res);
+        })
+}
 
 function errorHandler(error, req, res) {
-    res.status(500).json({
-        code: 500,
-        message: error.message || error
-    })
+    const err = {
+        status: 500,
+        massage: error,
+    }
+    res.status(500).send(err)
 }
+
+client.connect()
+    .then(
+        app.listen(PORT, () => {
+            console.log("listening to port 3000");
+        }
+        )
+    )
+    .catch((err) => {
+        console.log(err)
+    })
