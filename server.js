@@ -1,257 +1,190 @@
-'use strict';
-const express = require('express')
-const cors = require('cors')
-const app = express()
-const data = require('./movieData/data.json'); // outdated data.json
-const axios = require('axios'); // require axious to use it in the trend function
-require('dotenv').config(); // to be able to use dotenv.config from .env file
+"use strict"
+// IMPORTING DATA
+const data = require('./data.json')
+const express = require('express');
+const cors = require('cors');
+const axios = require('axios');
+const app = express();
+require('dotenv').config();
+app.use(express.json()) // not necessary now. But remember it when used post method and getting info JSON from client.
 const pg = require('pg');
-const client = new pg.Client(process.env.DBURL); // Creating client from the database url
+const client = new pg.Client(process.env.DBURL)
+const PORTAL = process.env.PORTAL || 3005;
+// -----------------------------------------------------------------------
+// -----------------------------------------------------------------------
 
-
+//Executing paths
 app.use(cors())
-app.use(express.json())
-const PORT = process.env.PORT || 3001; // port number from .env and backup port
+app.get('/', getLibaray)
+app.get('/favorite', getFavorite)
+app.get('/error', (req, res) => { // testing error handler! go to the route so it shows
+    chicken.fly()
+})
+app.get('/trending', handleTrendingMovies) // rout 1
+app.get('/search', handleSearch)  // rout 2
+app.get('/upcoming', handleUpcoming)  // rout 3
+app.get('/top-rated', handleTopRated)  // rout 4
+app.get('/getMovies', handleDbMovies)
+app.post('/addMovie', handleAddingMovie)
+app.get('/getMovie/:id', handleSearchMovieById)
+app.put('/UPDATE/:id', updateMyMovieList)
+app.delete('/DELETE/:id', deleteMovieById)
+app.use('*', notFoundPage)
+app.use(errorHandling)
+//-----------------------------------------------------------------------
+//-----------------------------------------------------------------------
+
+//Functions
+function errorHandling(err, req, res, next) {
+
+    console.log("ERROR 500")
+    res.status(500).json({
+        "status": 500,
+        "responseText": err.message || err
+    })
+    // next(err) no other errorhandling middlewares to pass to .
 
 
-
-// app.get routes
-app.get('/', handleHome)
-app.get('/favorite', handleFav)
-app.get('/trend', handleTrend)
-app.get('/search', handleSearch)
-
-app.get('/trend/image', imgHandler)
-app.get('/trend/overview', handleTrendOverview)
-
-app.get('/addmovie', seeMovieHandler)
-app.post('/addmovie', addMovieHandler)
-app.get('/addmovie/:id', getHandler)
-app.put('/addmovie/:id', updateHandler)
-app.delete('/addmovie/:id', deleteHandler)
-// constructor to extract data
-function Movie(id, title, release_date, posterPath, overview) {
-    this.id = id;
-    this.title = title
-    this.release_date = release_date
-    this.posterPath = posterPath
-    this.overview = overview
 }
-// handle home and routes
-//................................................................
-function handleHome(req, res) {
-    const newMovie = new Movie(data.id, data.title, data.release_date)
-    res.json(
-        { newMovie: newMovie }
-    )
+function notFoundPage(req, res) {
+    res.status(404).json({
+        "status": 404,
+        "responseText": "Sorry, Page Not Found"
+    })
 }
+function getLibaray(req, res) {
+    let movie = new Movie(data.title, data.poster_path, data.overview, data.release_date, data.id)
+    res.status(200).json(movie)
+}
+function getFavorite(req, res) {
+    res.send("Welcome to Favorite Page")
+}
+async function handleTrendingMovies(req, res) {
+    let axiosData = await axios.get(`${process.env.APISITE}trending/all/week?api_key=${process.env.APIKEY}`);
+    Movie.allMovies = []
+    axiosData.data.results.map(movie => new Movie(movie.name, movie.title, movie.poster_path, movie.overview, movie.release_date, movie.first_air_date, movie.id))
+    res.status(200).json({
+        trending: Movie.allMovies
+    })
 
-function handleFav(req, res) {
-
-    res.send('welcome to favorites')
 }
 function handleSearch(req, res) {
-    const searchQuery = req.query.laith;
-    // https://api.themoviedb.org/3/search/movie?api_key=668baa4bb128a32b82fe0c15b21dd699&language=en-US&query=The&page=2
-    axios.get(`${process.env.URLSEARCH}?api_key=${process.env.MOVKEY}&query=${searchQuery}`).then(result => {
-        res.status(200).json(
-            {
-                code: 200,
-                movie: result.data.results
-            }
-        );
-    }).catch(err => {
-        handleErorr(err, req, res, next);
+    const searchMovie = req.query.query
+    console.log(searchMovie)
+    let axiosSearchData = axios.get(`${process.env.APISITE}search/movie?api_key=${process.env.APIKEY}&query=${searchMovie}`)
+    Movie.allMovies = []
+    // axiosSearchData.data.results.map(movie => new Movie(movie.name,movie.title,movie.poster_path,movie.overview,movie.release_date,movie.first_air_date,movie.id))
+    axiosSearchData.then(result => {
+        result.data.results.map(movie => new Movie(movie.name, movie.title, movie.poster_path, movie.overview, movie.release_date, movie.first_air_date, movie.id))
+        if (searchMovie === undefined) {
+            res.status(200).json({
+                Message: "pass your search in the url after the word (search) as '?query=<the Name of your movie without the angle signs> , if your search is composed of more than one word seperate it with + sign' ",
+                Example: "http://localhost:3000/search?query=naruto"
+            })
+        }
+        else {
+            res.status(200).json({
+                ResultOfSearch: Movie.allMovies
+            })
+        }
     });
 }
-
-async function handleTrend(req, res) {
-    try {
-        const moveData = await axios.get(`${process.env.URLMOVIE}?api_key=${process.env.MOVKEY}`);
-
-        const movieData = moveData.data.results.map(movie => ({
-            id: movie.id,
-            title: movie.title,
-            release_date: movie.release_date,
-            poster_path: movie.poster_path,
-            overview: movie.overview
-        }));
-
+async function handleUpcoming(req, res) {
+    const axiosData = await axios.get(`${process.env.APISITE}movie/upcoming?api_key=${process.env.APIKEY}`);
+    Movie.allMovies = []
+    axiosData.data.results.map(movie => new Movie(movie.name, movie.title, movie.poster_path, movie.overview, movie.release_date, movie.first_air_date, movie.id))
+    res.status(200).json({
+        Upcoming: Movie.allMovies
+    })
+}
+async function handleTopRated(req, res) {
+    const axiosData = await axios.get(`${process.env.APISITE}movie/top_rated?api_key=${process.env.APIKEY}`);
+    Movie.allMovies = []
+    axiosData.data.results.map(movie => new Movie(movie.name, movie.title, movie.poster_path, movie.overview, movie.release_date, movie.first_air_date, movie.id))
+    res.status(200).json({
+        Upcoming: Movie.allMovies
+    })
+}
+function handleDbMovies(req, res) {
+    const sql = 'select * from movies_list';
+    client.query(sql).then(selectedMovies => {
         res.json({
-            code: 200,
-            message: movieData
-        });
-
-    } catch (error) {
-        handleErorr(err, req, res, next);
-    }
+            count: selectedMovies.rowCount,
+            movies: selectedMovies.rows
+        })
+    })
 
 }
-
-// display pic of the first movie of trending 
-async function imgHandler(req, res) {
-    try { //used the try catch method to make debugging easier
-        const movieData = await axios.get(`${process.env.URLMOVIE}?api_key=${process.env.MOVKEY}`);
-
-        if (movieData.data.results.length === 0) {
-            return res.status(404).send("No movies found.");
-        }
-
-        const posterPath = movieData.data.results[0].poster_path;
-        const imagePath = `https://image.tmdb.org/t/p/w500/${posterPath}`;
-        //used response type and chosen arraybuffer data type then used from to tell the client what type of data it is which is bvinary data so it can understand it and use it correctly
-
-        const imageResponse = await axios.get(imagePath, { responseType: 'arraybuffer' });
-        const imageBuffer = Buffer.from(imageResponse.data, 'binary');
-
-        res.type('jpg').send(imageBuffer);
-    } catch (error) {
-        console.error(error);
-        res.status(500).send("Internal server error.");
-    }
-}
-
-
-async function handleTrendOverview(req, res) {
-    try {
-        const movieData = await axios.get(`${process.env.URLMOVIE}?api_key=${process.env.MOVKEY}`);
-
-        if (movieData.data.results.length === 0) {
-            return res.status(404).send("No movies found.");
-        }
-
-        const firstMovieId = movieData.data.results[0].id;
-        // console.log(firstMovieId)
-
-        const overviewData = await axios.get(`https://api.themoviedb.org/3/movie/${firstMovieId}?api_key=${process.env.MOVKEY}`);
-        console.log(overviewData)
-        const overview = overviewData.data.overview;
-
-        res.status(200).json({
-            code: 200,
-            overview: overview
-        });
-    } catch (error) {
-        console.error(error);
-        res.status(500).send("Internal server error.");
-    }
-}
-// data base handler get post update delete
-function seeMovieHandler(req, res) {
-    const sql = `select * from added_movie`;
-    client.query(sql).then(movie => {
-        res.json(
-            {
-                count: movie.rowCount,
-                data: movie.rows
-            });
-        // console.log(movie);
-
-    }).catch(err => {
-        handleErorr(err, req, res, next);
-    });
-}
-function addMovieHandler(req, res) {
+function handleAddingMovie(req, res) {
     const userInput = req.body;
-    const sql = `insert into added_movie(title, overview) values($1, $2) returning *`;
-
-    const handleValueFromUser = [userInput.title, userInput.overview];
-
-    client.query(sql, handleValueFromUser).then(data => {
-
-        const insertedMovie = data.rows[0];
-        const generatedId = insertedMovie.id;
-        // insertedMovie.generatedId = generatedId;
-        res.status(201).json(insertedMovie);
-    }).catch(err => handleErorr(err, req, res, next));
+    console.log(userInput)
+    const sql = `insert into movies_list(movie_id,title,overview,poster_path,user_Comment) values ($1,$2,$3,$4,$5) returning *`;
+    const handleSqlInjection = [userInput.id, userInput.title, userInput.overview, userInput.poster_path, userInput.userComment]
+    client.query(sql, handleSqlInjection).then(addedByUser => {
+        res.status(201).json(addedByUser.rows)
+    })
 }
-//................................................................
+function handleSearchMovieById(req, res) {
+    let id = req.params.id;
+    const sql = `select * from movies_list where id = ${id}`;
+    client.query(sql).then(gotById => {
 
-// Lab 14 get update and delete using sql
-function getHandler(req, res) {
-    const id = req.params.id;
-    const sql = 'SELECT * FROM added_movie WHERE id = $1;';
-    const params = [id];
-    client.query(sql, params)
-        .then(data => {
-            if (data.rowCount === 0) {
-                res.status(404).send(`Movie with ID ${id} not found`);
-            } else {
-                res.status(200).json({ data: data.rows[0] });
-            }
+        let obj = gotById.rows[0];
+        console.log(obj)
+        if (obj !== undefined) {
+            let constructed = new Movie(obj.name, obj.title, obj.poster_path, obj.overview, obj.release_date, obj.first_air_date, obj.movie_id)
+            res.status(200).json({
+                Messeage: 'Movie Found!',
+                result: constructed
+            })
+        }
+        else {
+            res.status(404).json({
+                Messeage: 'Movie NoT Found!'
+
+            })
+        }
+        //One way on handling
+        // let constructed = new Movie(obj.name,obj.title,obj.poster_path,obj.overview,obj.release_date,obj.first_air_date,obj.movie_id)
+        //     res.status(200).json({
+        //         Messeage: 'Movie Found!',
+        //         result: constructed
+        //     })
+    }) //.catch(err => errorHandling(err, req, res)) this might expose some information
+}
+function updateMyMovieList(req, res) {
+    const id = req.params.id
+    let dataToUpdate = req.body
+    const sql = `update movies_list set user_comment = $1  where id = $2 returning *`
+    const toUpdate = [dataToUpdate.user_comment, id]
+    client.query(sql, toUpdate).then(updated => res.status(202).json(updated.rows))
+}
+function deleteMovieById(req, res) {
+    const toDeleteID = req.params.id
+    const sql = `delete from movies_list where id = ${toDeleteID}`
+    client.query(sql).then(() => {
+        res.status(204).json({
+            status: 204,
+            message: 'The selected movie has been deleted successfully!'
         })
-        .catch(err => {
-            console.error('Error executing query', err.stack);
-            res.status(500).send('Error executing query');
-        });
+    }).catch(err => errorHandling(err, req, res))
+
 }
-
-function updateHandler(req, res) {
-    const id = req.params.id;
-    const updateData = req.body;
-    const sql = `UPDATE added_movie
-               SET title = $1, overview = $2
-               WHERE id = $3
-               RETURNING *;`;
-    const updated = [updateData.title, updateData.overview, id];
-    client.query(sql, updated)
-        .then(data => {
-            res.status(202).json({ data });
-        })
-        .catch(err => {
-            console.error('Error executing query', err.stack);
-            res.status(500).send('Error executing query');
-        });
+function Movie(name, title, poster_path, overview, release_date, first_air_date, id) {
+    this.name = name;
+    this.id = id;
+    this.title = title;
+    this.release_date = release_date;
+    this.first_air_date = first_air_date;
+    this.poster_path = poster_path;
+    this.overview = overview;
+    Movie.allMovies.push(this)
 }
-
-function deleteHandler(req, res) {
-    const id = req.params.id;
-    const sql = 'DELETE FROM added_movie WHERE id = $1 RETURNING *;';
-    const params = [id];
-    client.query(sql, params)
-        .then(data => {
-            if (data.rowCount === 0) {
-                res.status(404).send(`Movie with ID ${id} not found`);
-            } else {
-                res.status(204).send();
-            }
-        })
-        .catch(err => {
-            console.error('Error executing query', err.stack);
-            res.status(500).send('Error executing query');
-        });
-}
-//................................................
+Movie.allMovies = []
+//-----------------------------------------------------------------------
+//-----------------------------------------------------------------------
 
 
-// error handling
-// handle 404 errors
-app.use(handleErorr);
-app.use('/*', (req, res, next) => {
-    res.status(404).json({
-        statusCode: 404,
-        message: 'Page not found!'
-    });
-});
-
-//handle 500 errors
-
-function handleErorr(err, req, res, next) {
-    // console.error(err.stack);
-    res.status(500).json({
-        statusCode: 500,
-        message: 'Internal server error!'
-    });
-}
-
-// function errorHandler(error, req, res) {
-//   res.status(500).json({
-//     code: 500,
-//     message: error.message || error
-//   })
-// }
-client.connect().then(test => {
-
-    app.listen(PORT, () => console.log('up and running'));
-}
-)
+client.connect().then(() => {
+    app.listen(PORTAL, () => console.log('ran successfully'))
+})
