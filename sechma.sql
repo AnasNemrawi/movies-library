@@ -1,8 +1,10 @@
-CREATE TABLE IF NOT EXISTS firstMOV(
-id SERIAL PRIMARY KEY,
-title VARCHAR (255),
-release_date VARCHAR (255),
-poster_path VARCHAR(255),
-overview VARCHAR(10000)
-comment VARCHAR(100000)
-);
+create table if not exists movies_list(
+    id serial primary key,
+    movie_id integer,
+    title varchar(255),
+    overview varchar(10000),
+    poster_path varchar (1000),
+    user_comment varchar(255)
+); 
+
+-- insert into movies_list(movie_id,title,overview,poster_path) values (2321,'bananana','nice','nowhere');
