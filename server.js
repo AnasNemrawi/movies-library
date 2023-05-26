@@ -1,6 +1,6 @@
 "use strict"
 // IMPORTING DATA
-const data = require('./data.json')
+const data = require('./Movie Data/data.json')
 const express = require('express');
 const cors = require('cors');
 const axios = require('axios');
